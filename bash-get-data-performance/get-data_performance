@@ -1,0 +1,37 @@
+#!/bin/bash
+
+DAY=$(date -d "-4 hour" +%Y-%m-%d)
+BASEDIR=/home/oscar/crons/data/xxxxxxxxxxxxx-xxxxxxxxxxxxx
+PROCESSINGDIR=pmresult/$DAY/processing
+PROCESSEDNGDIR=pmresult/$DAY/processed
+PMEXPORTDIR=$(date -d "-4 hour" +%Y%m%d )
+U2000PATH=/opt/oss/server/nbi/text/pfm_output
+U2000HOST=xxxxxxxxxxxxx.xxxxxxxxxxxxx.xxxxxxxxxxxxx.xxxxxxxxxxxxx
+U2000USER=xxxxxxxxxxxxx
+U2000PASS='xxxxxxxxxxxxx'
+BUCKET=s3://xxxxxxxxxxxxx-xxxxxxxxxxxxx-xxxxxxxxxxxxx
+BUCKETFOLDER=xxxxxxxxxxxxx
+
+mkdir -p $BASEDIR/$PROCESSINGDIR
+mkdir -p $BASEDIR/$PROCESSEDNGDIR
+
+for PMPREFIX in $(cat $BASEDIR/pmresults.cfg)
+do
+        echo "SINCRONIZANDO: $PMPREFIX"
+        EXLUDES=""
+        for TOEXCLUDE in $(ls $BASEDIR/$PROCESSEDNGDIR -p | grep -v / |grep $PMPREFIX*); do
+                #echo "SE EXCLUYE $(basename $TOEXCLUDE)"
+                EXLUDES+=" --exclude '$(basename $TOEXCLUDE)'"
+        done
+
+        lftp -e "mirror $U2000PATH/$PMEXPORTDIR/ $BASEDIR/$PROCESSINGDIR --include '$PMPREFIX*' $EXLUDES ; exit" -u $U2000USER,$U2000PASS sftp://$U2000HOST
+done
+
+
+for PMPREFIX in $(cat $BASEDIR/pmresults.cfg)
+do
+
+        echo "$(date '+%d/%m/%Y %H:%M:%S'): PROCESANDO $PMPREFIX ...."
+        aws s3 cp $BASEDIR/$PROCESSINGDIR/ $BUCKET/$BUCKETFOLDER/$PMPREFIX/$DAY/ --recursive --exclude "*" --include "$PMPREFIX*.csv"
+        mv $BASEDIR/$PROCESSINGDIR/$PMPREFIX* $BASEDIR/$PROCESSEDNGDIR/
+done
